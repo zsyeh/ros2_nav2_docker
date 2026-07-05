@@ -1,0 +1,46 @@
+FROM ros2-nav2-humble:local
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV ROS_DISTRO=humble
+
+ARG http_proxy
+ARG https_proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    build-essential \
+    cmake \
+    python3-colcon-common-extensions \
+    python3-rosdep \
+    ros-humble-ament-cmake-auto \
+    ros-humble-rmw-cyclonedds-cpp \
+    libapr1-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/fastlio_ws/src
+
+RUN git clone --depth 1 https://github.com/Livox-SDK/Livox-SDK2.git /tmp/Livox-SDK2 && \
+    cmake -S /tmp/Livox-SDK2 -B /tmp/Livox-SDK2/build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build /tmp/Livox-SDK2/build -j"$(nproc)" && \
+    cmake --install /tmp/Livox-SDK2/build && \
+    ldconfig && \
+    rm -rf /tmp/Livox-SDK2
+
+RUN git clone --depth 1 https://github.com/Livox-SDK/livox_ros_driver2.git && \
+    git clone --depth 1 --recursive https://github.com/Ericsii/FAST_LIO_ROS2.git fast_lio
+
+WORKDIR /opt/fastlio_ws
+
+RUN . /opt/ros/humble/setup.sh && \
+    cd src/livox_ros_driver2 && \
+    ./build.sh humble
+
+RUN . /opt/ros/humble/setup.sh && \
+    . /opt/fastlio_ws/install/setup.sh && \
+    colcon build --packages-select fast_lio --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+RUN echo "source /opt/fastlio_ws/install/setup.bash" >> /root/.bashrc
+
+WORKDIR /root
